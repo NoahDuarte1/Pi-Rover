@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PiRover Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #eee;
+            padding: 20px;
+        }
+        .card {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            max-width: 660px;
+        }
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+        }
+        #status { font-weight: bold; }
+        .online { color: #4caf50; }
+        .offline { color: #f44336; }
+        img { border-radius: 6px; }
+        button {
+            font-size: 18px;
+            padding: 12px 20px;
+            margin: 4px;
+            background: #3a3a3a;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:active { background: #4caf50; }
+        button.active-mode { background: #4caf50; }
+        input[type=range] { width: 100%; margin: 10px 0; }
+        input[type=text] {
+            font-size: 16px;
+            padding: 8px;
+            background: #3a3a3a;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 6px;
+            margin-right: 8px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PiRover Dashboard</h1>
+    <p id="status">Connecting...</p>
+
+    <div class="card">
+        <h3>Live Camera</h3>
+        <img src="/video_feed" width="640" height="480">
+    </div>
+
+    <div class="card">
+        <h3>Mode</h3>
+        <button id="btn_manual" class="active-mode" onclick="setMode('manual')">Manual</button>
+        <button id="btn_follow" onclick="setMode('follow_person')">Follow Person</button>
+        <br><br>
+        <input type="text" id="objectTarget" placeholder="e.g. bottle, chair...">
+        <button onclick="setFindObject()">Find Object</button>
+        <p id="mode_status">Mode: Manual</p>
+    </div>
+
+    <div class="card">
+        <h3>Drive Controls</h3>
+        <button onclick="sendCmd('FORWARD:200')">▲ Forward</button>
+        <br><br>
+        <button onclick="sendCmd('LEFT:255')">◀ Left</button>
+        <button onclick="sendCmd('STOP')">■ Stop</button>
+        <button onclick="sendCmd('RIGHT:255')">▶ Right</button>
+        <br><br>
+        <button onclick="sendCmd('BACKWARD:200')">▼ Backward</button>
+    </div>
+
+    <div class="card">
+        <h3>Camera Tilt</h3>
+        <input type="range" min="0" max="180" value="90" id="servoSlider"
+               oninput="sendServo(this.value)">
+        <span id="servoVal">90°</span>
+    </div>
+
+    <div class="card">
+        <h3>Sensors</h3>
+        <div class="sensor-row"><span>Front:</span><span id="front">--</span> cm</div>
+        <div class="sensor-row"><span>Left:</span><span id="left">--</span> cm</div>
+        <div class="sensor-row"><span>Right:</span><span id="right">--</span> cm</div>
+        <div class="sensor-row"><span>Temp:</span><span id="temp">--</span> °C</div>
+        <div class="sensor-row"><span>Humidity:</span><span id="hum">--</span> %</div>
+    </div>
+
+    <div class="card">
+        <h3>Rover Status</h3>
+        <p id="rover_status">Unknown</p>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('connect', () => {
+            document.getElementById('status').innerText = 'Connected to rover!';
+        });
+
+        socket.on('sensor_update', (data) => {
+            document.getElementById('front').innerText = data.front.toFixed(1);
+            document.getElementById('left').innerText = data.left.toFixed(1);
+            document.getElementById('right').innerText = data.right.toFixed(1);
+            document.getElementById('temp').innerText = data.temp.toFixed(1);
+            document.getElementById('hum').innerText = data.hum.toFixed(1);
+        });
+
+        socket.on('status_update', (data) => {
+            const el = document.getElementById('rover_status');
+            el.innerText = data;
+            el.className = data === 'online' ? 'online' : 'offline';
+        });
+
+        function sendCmd(command) {
+            fetch('/cmd', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command: command})
+            });
+        }
+
+        function sendServo(angle) {
+            document.getElementById('servoVal').innerText = angle + '°';
+            fetch('/servo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({angle: angle})
+            });
+        }
+
+        function setMode(mode) {
+            fetch('/mode', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode: mode})
+            });
+            document.getElementById('btn_manual').classList.remove('active-mode');
+            document.getElementById('btn_follow').classList.remove('active-mode');
+            document.getElementById('btn_' + mode).classList.add('active-mode');
+            document.getElementById('mode_status').innerText = 'Mode: ' + mode;
+        }
+
+        function setFindObject() {
+            const target = document.getElementById('objectTarget').value.trim();
+            if (!target) return;
+            fetch('/mode', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode: 'find_object', target: target})
+            });
+            document.getElementById('btn_manual').classList.remove('active-mode');
+            document.getElementById('btn_follow').classList.remove('active-mode');
+            document.getElementById('mode_status').innerText = 'Mode: Find Object (' + target + ')';
+        }
+    </script>
+</body>
+</html>
