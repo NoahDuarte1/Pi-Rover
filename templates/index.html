@@ -63,7 +63,7 @@
     <div class="card">
         <h3>Mode</h3>
         <button id="btn_manual" class="active-mode" onclick="setMode('manual')">Manual</button>
-        <button id="btn_follow" onclick="setMode('follow_person')">Follow Person</button>
+        <button id="btn_follow_person" onclick="setMode('follow_person')">Follow Person</button>
         <br><br>
         <input type="text" id="objectTarget" placeholder="e.g. bottle, chair...">
         <button onclick="setFindObject()">Find Object</button>
@@ -72,6 +72,7 @@
 
     <div class="card">
         <h3>Drive Controls</h3>
+        <p style="font-size:13px; color:#888; margin-top:0">Arrow keys to drive, Space to stop. A/D to tilt camera.</p>
         <button onclick="sendCmd('FORWARD:200')">▲ Forward</button>
         <br><br>
         <button onclick="sendCmd('LEFT:255')">◀ Left</button>
@@ -83,6 +84,7 @@
 
     <div class="card">
         <h3>Camera Tilt</h3>
+        <p style="font-size:13px; color:#888; margin-top:0">A = tilt left, D = tilt right</p>
         <input type="range" min="0" max="180" value="90" id="servoSlider"
                oninput="sendServo(this.value)">
         <span id="servoVal">90°</span>
@@ -119,8 +121,17 @@
 
         socket.on('status_update', (data) => {
             const el = document.getElementById('rover_status');
-            el.innerText = data;
-            el.className = data === 'online' ? 'online' : 'offline';
+            if (data === 'online') {
+                el.className = 'online';
+                el.innerText = 'Online';
+            } else if (data === 'killswitch') {
+                el.className = '';
+                el.innerText = '⚠️ KILL SWITCH ACTIVE';
+                el.style.color = '#ff9800';
+            } else {
+                el.className = 'offline';
+                el.innerText = data;
+            }
         });
 
         function sendCmd(command) {
@@ -140,6 +151,14 @@
             });
         }
 
+        function servoStep(delta) {
+            const slider = document.getElementById('servoSlider');
+            let angle = parseInt(slider.value) + delta;
+            angle = Math.max(0, Math.min(180, angle));
+            slider.value = angle;
+            sendServo(angle);
+        }
+
         function setMode(mode) {
             fetch('/mode', {
                 method: 'POST',
@@ -147,8 +166,10 @@
                 body: JSON.stringify({mode: mode})
             });
             document.getElementById('btn_manual').classList.remove('active-mode');
-            document.getElementById('btn_follow').classList.remove('active-mode');
-            document.getElementById('btn_' + mode).classList.add('active-mode');
+            document.getElementById('btn_follow_person').classList.remove('active-mode');
+            if (document.getElementById('btn_' + mode)) {
+                document.getElementById('btn_' + mode).classList.add('active-mode');
+            }
             document.getElementById('mode_status').innerText = 'Mode: ' + mode;
         }
 
@@ -161,9 +182,34 @@
                 body: JSON.stringify({mode: 'find_object', target: target})
             });
             document.getElementById('btn_manual').classList.remove('active-mode');
-            document.getElementById('btn_follow').classList.remove('active-mode');
+            document.getElementById('btn_follow_person').classList.remove('active-mode');
             document.getElementById('mode_status').innerText = 'Mode: Find Object (' + target + ')';
         }
+
+        // Keyboard controls
+        const keyState = {};
+
+        document.addEventListener('keydown', (e) => {
+            if (keyState[e.key]) return;
+            keyState[e.key] = true;
+
+            switch(e.key) {
+                case 'ArrowUp':    sendCmd('FORWARD:200'); break;
+                case 'ArrowDown':  sendCmd('BACKWARD:200'); break;
+                case 'ArrowLeft':  sendCmd('LEFT:255'); break;
+                case 'ArrowRight': sendCmd('RIGHT:255'); break;
+                case ' ':          sendCmd('STOP'); break;
+                case 'a':          servoStep(-10); break;
+                case 'd':          servoStep(10); break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keyState[e.key] = false;
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+                sendCmd('STOP');
+            }
+        });
     </script>
 </body>
 </html>
