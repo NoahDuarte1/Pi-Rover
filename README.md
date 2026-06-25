@@ -4,6 +4,21 @@ A 4-wheel autonomous/semi-autonomous rover built with a Raspberry Pi 4B and ESP3
 
 ---
 
+## Gallery
+
+### Dashboard
+![Dashboard - Manual Mode](images/Screenshot%202026-06-24%20220750.png)
+![Dashboard - Sensors](images/Screenshot%202026-06-24%20224618.png)
+![Dashboard - Kill Switch](images/Screenshot%202026-06-24%20224650.png)
+
+### Rover
+![Rover Front](images/IMG_1640.jpg)
+![Rover Side](images/IMG_1641.jpg)
+![Rover Top](images/IMG_1642.jpg)
+![Rover Back](images/IMG_1643.jpg)
+
+---
+
 ## Features
 
 - **Live web dashboard** — camera feed, sensor readouts, drive controls, mode switching
