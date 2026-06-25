@@ -1,176 +1,562 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="dark">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PiRover Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
+        /* ── Theme variables ─────────────────────────────── */
+        :root {
+            --bg: #0f0f0f;
+            --card: #1c1c1c;
+            --card-alt: #252525;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --border: #333;
+            --accent: #4caf50;
+            --accent-dim: rgba(76,175,80,0.15);
+            --btn: #2a2a2a;
+            --btn-border: #444;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --shadow: rgba(0,0,0,0.4);
+        }
+        [data-theme="light"] {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --card-alt: #f7f8fa;
+            --text: #1a1a1a;
+            --text-muted: #666;
+            --border: #ddd;
+            --accent: #388e3c;
+            --accent-dim: rgba(56,142,60,0.1);
+            --btn: #efefef;
+            --btn-border: #ccc;
+            --danger: #d32f2f;
+            --warning: #f57c00;
+            --shadow: rgba(0,0,0,0.1);
+        }
+
+        /* ── Reset & base ────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
-            color: #eee;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            transition: background 0.2s, color 0.2s;
         }
-        .card {
-            background: #2a2a2a;
+
+        /* ── Kill switch banner ──────────────────────────── */
+        #killswitch-banner {
+            display: none;
+            background: var(--danger);
+            color: #fff;
+            text-align: center;
+            padding: 12px 20px;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.4px;
+        }
+        #killswitch-banner.active { display: block; }
+
+        /* ── Header ─────────────────────────────────────── */
+        header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 13px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+        header h1 {
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+        #conn-pill {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        #conn-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #555;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        #conn-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+        #theme-btn {
+            background: var(--btn);
+            border: 1px solid var(--btn-border);
+            color: var(--text);
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            max-width: 660px;
+            padding: 6px 11px;
+            cursor: pointer;
+            font-size: 17px;
+            line-height: 1;
+            transition: background 0.15s;
         }
-        .sensor-row {
+        #theme-btn:hover { background: var(--card-alt); }
+
+        /* ── Main container ──────────────────────────────── */
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 18px 14px 30px;
+        }
+
+        /* ── Card ────────────────────────────────────────── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+        .card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.9px;
+            color: var(--text-muted);
+            margin-bottom: 13px;
+        }
+
+        /* ── Top grid ────────────────────────────────────── */
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+        @media (min-width: 768px) {
+            .top-grid { grid-template-columns: minmax(0, 640px) 1fr; }
+        }
+
+        /* ── Camera ──────────────────────────────────────── */
+        #camera-card img {
+            width: 100%;
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* ── Right column ────────────────────────────────── */
+        .right-col { display: flex; flex-direction: column; gap: 14px; }
+
+        /* ── Mode selector ───────────────────────────────── */
+        .mode-options { display: flex; flex-direction: column; gap: 8px; }
+        .mode-card {
+            border: 2px solid var(--border);
+            border-radius: 9px;
+            padding: 11px 14px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            background: var(--card-alt);
+        }
+        .mode-card:hover { border-color: var(--accent); }
+        .mode-card.active { border-color: var(--accent); background: var(--accent-dim); }
+        .mode-title { font-weight: 600; font-size: 14px; }
+        .mode-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .find-row {
+            display: flex;
+            gap: 7px;
+            margin-top: 9px;
+        }
+        .find-row input[type=text] {
+            flex: 1;
+            min-width: 0;
+            font-size: 13px;
+            padding: 7px 10px;
+            background: var(--btn);
+            color: var(--text);
+            border: 1px solid var(--btn-border);
+            border-radius: 7px;
+        }
+        .find-row input[type=text]::placeholder { color: var(--text-muted); }
+        .find-row button {
+            font-size: 13px;
+            padding: 7px 13px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .find-row button:hover { opacity: 0.88; }
+        #mode_status { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+
+        /* ── D-pad ───────────────────────────────────────── */
+        .dpad {
+            display: grid;
+            grid-template-areas:
+                ".    fwd  ."
+                "lft  stp  rgt"
+                ".    bck  .";
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 7px;
+            max-width: 230px;
+            margin: 0 auto;
+        }
+        .dp {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            aspect-ratio: 1;
+            min-height: 62px;
+            background: var(--btn);
+            border: 1px solid var(--btn-border);
+            border-radius: 10px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 20px;
+            transition: background 0.1s, transform 0.08s;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .dp:active, .dp.pressed { background: var(--accent); color: #fff; transform: scale(0.93); }
+        .dp.dp-stop { background: var(--card-alt); }
+        .dp.dp-stop:active, .dp.dp-stop.pressed { background: var(--danger); color: #fff; }
+        .dp .kbd {
+            font-size: 9px;
+            font-family: monospace;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            padding: 1px 5px;
+            opacity: 0.75;
+        }
+        [data-theme="light"] .dp .kbd { background: rgba(0,0,0,0.07); }
+        [data-area=fwd] { grid-area: fwd; }
+        [data-area=lft] { grid-area: lft; }
+        [data-area=stp] { grid-area: stp; }
+        [data-area=rgt] { grid-area: rgt; }
+        [data-area=bck] { grid-area: bck; }
+        .kbd-hint {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 11px;
+            line-height: 1.7;
+        }
+
+        /* ── Camera tilt ─────────────────────────────────── */
+        .tilt-labels {
             display: flex;
             justify-content: space-between;
-            padding: 5px 0;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
         }
-        #status { font-weight: bold; }
-        .online { color: #4caf50; }
-        .offline { color: #f44336; }
-        img { border-radius: 6px; }
-        button {
-            font-size: 18px;
-            padding: 12px 20px;
-            margin: 4px;
-            background: #3a3a3a;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 6px;
-            cursor: pointer;
+        input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 8px; }
+        .tilt-val {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
-        button:active { background: #4caf50; }
-        button.active-mode { background: #4caf50; }
-        input[type=range] { width: 100%; margin: 10px 0; }
-        input[type=text] {
-            font-size: 16px;
-            padding: 8px;
-            background: #3a3a3a;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 6px;
-            margin-right: 8px;
-            width: 200px;
+        .tilt-hint { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── Sensors ─────────────────────────────────────── */
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
         }
+        .s-card {
+            background: var(--card-alt);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 10px 12px;
+            text-align: center;
+        }
+        .s-icon { font-size: 18px; margin-bottom: 4px; }
+        .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 6px; }
+        .s-val { font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: -0.5px; }
+        .s-unit { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+        .s-bar-track { background: var(--border); border-radius: 4px; height: 5px; margin-top: 10px; overflow: hidden; }
+        .s-bar { height: 100%; border-radius: 4px; width: 0%; transition: width 0.4s ease, background 0.4s ease; }
+
+        /* ── Status bar ──────────────────────────────────── */
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        #status-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: #555;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        #status-dot.online  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+        #status-dot.offline { background: var(--danger); }
+        #status-dot.killswitch { background: var(--warning); }
+        #rover_status { font-size: 14px; font-weight: 600; }
     </style>
 </head>
 <body>
-    <h1>PiRover Dashboard</h1>
-    <p id="status">Connecting...</p>
+    <div id="killswitch-banner">⚠️ KILL SWITCH ACTIVE — All motors stopped</div>
 
-    <div class="card">
-        <h3>Live Camera</h3>
-        <img src="/video_feed" width="640" height="480">
-    </div>
+    <header>
+        <h1>PiRover</h1>
+        <div id="conn-pill">
+            <div id="conn-dot"></div>
+            <span id="conn-label">Connecting…</span>
+        </div>
+        <button id="theme-btn" onclick="toggleTheme()" title="Toggle light / dark mode">🌙</button>
+    </header>
 
-    <div class="card">
-        <h3>Mode</h3>
-        <button id="btn_manual" class="active-mode" onclick="setMode('manual')">Manual</button>
-        <button id="btn_follow_person" onclick="setMode('follow_person')">Follow Person</button>
-        <br><br>
-        <input type="text" id="objectTarget" placeholder="e.g. bottle, chair...">
-        <button onclick="setFindObject()">Find Object</button>
-        <p id="mode_status">Mode: Manual</p>
-    </div>
+    <main>
+        <div class="top-grid">
 
-    <div class="card">
-        <h3>Drive Controls</h3>
-        <p style="font-size:13px; color:#888; margin-top:0">Arrow keys to drive, Space to stop. A/D to tilt camera.</p>
-        <button onclick="sendCmd('FORWARD:200')">▲ Forward</button>
-        <br><br>
-        <button onclick="sendCmd('LEFT:255')">◀ Left</button>
-        <button onclick="sendCmd('STOP')">■ Stop</button>
-        <button onclick="sendCmd('RIGHT:255')">▶ Right</button>
-        <br><br>
-        <button onclick="sendCmd('BACKWARD:200')">▼ Backward</button>
-    </div>
+            <!-- Camera -->
+            <div class="card" id="camera-card">
+                <div class="card-title">Live Camera</div>
+                <img src="/video_feed" alt="Live camera feed">
+            </div>
 
-    <div class="card">
-        <h3>Camera Tilt</h3>
-        <p style="font-size:13px; color:#888; margin-top:0">A = tilt left, D = tilt right</p>
-        <input type="range" min="0" max="180" value="90" id="servoSlider"
-               oninput="sendServo(this.value)">
-        <span id="servoVal">90°</span>
-    </div>
+            <div class="right-col">
 
-    <div class="card">
-        <h3>Sensors</h3>
-        <div class="sensor-row"><span>Front:</span><span id="front">--</span> cm</div>
-        <div class="sensor-row"><span>Left:</span><span id="left">--</span> cm</div>
-        <div class="sensor-row"><span>Right:</span><span id="right">--</span> cm</div>
-        <div class="sensor-row"><span>Temp:</span><span id="temp">--</span> °C</div>
-        <div class="sensor-row"><span>Humidity:</span><span id="hum">--</span> %</div>
-    </div>
+                <!-- Mode -->
+                <div class="card">
+                    <div class="card-title">Mode</div>
+                    <div class="mode-options">
+                        <div class="mode-card active" id="btn_manual" onclick="setMode('manual')">
+                            <div class="mode-title">🕹 Manual</div>
+                            <div class="mode-desc">Drive with buttons or keyboard</div>
+                        </div>
+                        <div class="mode-card" id="btn_follow_person" onclick="setMode('follow_person')">
+                            <div class="mode-title">👤 Follow Person</div>
+                            <div class="mode-desc">Autonomously track a person with YOLOv8</div>
+                        </div>
+                        <div class="mode-card" id="btn_find_object" onclick="focusFindObject()">
+                            <div class="mode-title">🔍 Find Object</div>
+                            <div class="mode-desc">Search for a named object and follow it</div>
+                            <div class="find-row">
+                                <input type="text" id="objectTarget" placeholder="e.g. bottle, chair…"
+                                       onclick="event.stopPropagation()">
+                                <button onclick="event.stopPropagation(); setFindObject()">Go</button>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="mode_status">Mode: Manual</p>
+                </div>
 
-    <div class="card">
-        <h3>Rover Status</h3>
-        <p id="rover_status">Unknown</p>
-    </div>
+                <!-- Drive controls -->
+                <div class="card">
+                    <div class="card-title">Drive Controls</div>
+                    <div class="dpad">
+                        <button class="dp" data-area="fwd" id="dp-fwd" onclick="sendCmd('FORWARD:200')">
+                            ▲<span class="kbd">↑</span>
+                        </button>
+                        <button class="dp" data-area="lft" id="dp-lft" onclick="sendCmd('LEFT:255')">
+                            ◀<span class="kbd">←</span>
+                        </button>
+                        <button class="dp dp-stop" data-area="stp" id="dp-stp" onclick="sendCmd('STOP')">
+                            ■<span class="kbd">spc</span>
+                        </button>
+                        <button class="dp" data-area="rgt" id="dp-rgt" onclick="sendCmd('RIGHT:255')">
+                            ▶<span class="kbd">→</span>
+                        </button>
+                        <button class="dp" data-area="bck" id="dp-bck" onclick="sendCmd('BACKWARD:200')">
+                            ▼<span class="kbd">↓</span>
+                        </button>
+                    </div>
+                    <p class="kbd-hint">Arrow keys to drive · Space to stop</p>
+                </div>
+
+                <!-- Camera tilt -->
+                <div class="card">
+                    <div class="card-title">Camera Tilt</div>
+                    <div class="tilt-labels">
+                        <span>◀ Left <small style="opacity:0.6">(A)</small></span>
+                        <span><small style="opacity:0.6">(D)</small> Right ▶</span>
+                    </div>
+                    <input type="range" min="0" max="180" value="90" id="servoSlider"
+                           oninput="sendServo(this.value)">
+                    <div class="tilt-val"><span id="servoVal">90</span>°</div>
+                    <div class="tilt-hint">A / D keys to step tilt</div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Sensors -->
+        <div class="card" style="margin-bottom:14px">
+            <div class="card-title">Sensors</div>
+            <div class="sensor-grid">
+                <div class="s-card">
+                    <div class="s-icon">▲</div>
+                    <div class="s-label">Front</div>
+                    <div class="s-val" id="front">--</div>
+                    <div class="s-unit">cm</div>
+                    <div class="s-bar-track"><div class="s-bar" id="front-bar"></div></div>
+                </div>
+                <div class="s-card">
+                    <div class="s-icon">◀</div>
+                    <div class="s-label">Left</div>
+                    <div class="s-val" id="left">--</div>
+                    <div class="s-unit">cm</div>
+                    <div class="s-bar-track"><div class="s-bar" id="left-bar"></div></div>
+                </div>
+                <div class="s-card">
+                    <div class="s-icon">▶</div>
+                    <div class="s-label">Right</div>
+                    <div class="s-val" id="right">--</div>
+                    <div class="s-unit">cm</div>
+                    <div class="s-bar-track"><div class="s-bar" id="right-bar"></div></div>
+                </div>
+                <div class="s-card">
+                    <div class="s-icon">🌡</div>
+                    <div class="s-label">Temperature</div>
+                    <div class="s-val" id="temp">--</div>
+                    <div class="s-unit">°C</div>
+                </div>
+                <div class="s-card">
+                    <div class="s-icon">💧</div>
+                    <div class="s-label">Humidity</div>
+                    <div class="s-val" id="hum">--</div>
+                    <div class="s-unit">%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rover status -->
+        <div class="card status-row">
+            <div id="status-dot"></div>
+            <span id="rover_status">Waiting for rover…</span>
+        </div>
+    </main>
 
     <script>
+        // ── Theme ──────────────────────────────────────────
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initTheme = saved || (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', initTheme);
+        document.getElementById('theme-btn').textContent = initTheme === 'dark' ? '☀️' : '🌙';
+
+        function toggleTheme() {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            document.getElementById('theme-btn').textContent = next === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem('theme', next);
+        }
+
+        // ── Socket.IO ──────────────────────────────────────
         const socket = io();
 
         socket.on('connect', () => {
-            document.getElementById('status').innerText = 'Connected to rover!';
+            document.getElementById('conn-dot').classList.add('connected');
+            document.getElementById('conn-label').textContent = 'Connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('conn-dot').classList.remove('connected');
+            document.getElementById('conn-label').textContent = 'Disconnected';
         });
 
         socket.on('sensor_update', (data) => {
-            document.getElementById('front').innerText = data.front.toFixed(1);
-            document.getElementById('left').innerText = data.left.toFixed(1);
-            document.getElementById('right').innerText = data.right.toFixed(1);
-            document.getElementById('temp').innerText = data.temp.toFixed(1);
-            document.getElementById('hum').innerText = data.hum.toFixed(1);
+            document.getElementById('front').textContent = data.front.toFixed(1);
+            document.getElementById('left').textContent  = data.left.toFixed(1);
+            document.getElementById('right').textContent = data.right.toFixed(1);
+            document.getElementById('temp').textContent  = data.temp.toFixed(1);
+            document.getElementById('hum').textContent   = data.hum.toFixed(1);
+            updateDistBar('front-bar', data.front);
+            updateDistBar('left-bar',  data.left);
+            updateDistBar('right-bar', data.right);
         });
 
+        function updateDistBar(id, cm) {
+            const bar = document.getElementById(id);
+            bar.style.width = Math.min(100, (cm / 200) * 100) + '%';
+            bar.style.background = cm < 20 ? '#f44336' : cm < 50 ? '#ff9800' : '#4caf50';
+        }
+
         socket.on('status_update', (data) => {
-            const el = document.getElementById('rover_status');
+            const dot    = document.getElementById('status-dot');
+            const txt    = document.getElementById('rover_status');
+            const banner = document.getElementById('killswitch-banner');
+            dot.className = '';
+            banner.classList.remove('active');
             if (data === 'online') {
-                el.className = 'online';
-                el.innerText = 'Online';
+                dot.classList.add('online');
+                txt.textContent = 'Rover Online';
             } else if (data === 'killswitch') {
-                el.className = '';
-                el.innerText = '⚠️ KILL SWITCH ACTIVE';
-                el.style.color = '#ff9800';
+                dot.classList.add('killswitch');
+                txt.textContent = '⚠️ Kill Switch Active';
+                banner.classList.add('active');
             } else {
-                el.className = 'offline';
-                el.innerText = data;
+                dot.classList.add('offline');
+                txt.textContent = data || 'Offline';
             }
         });
 
+        // ── Commands ───────────────────────────────────────
         function sendCmd(command) {
             fetch('/cmd', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({command: command})
+                body: JSON.stringify({command})
             });
         }
 
         function sendServo(angle) {
-            document.getElementById('servoVal').innerText = angle + '°';
+            document.getElementById('servoVal').textContent = angle;
             fetch('/servo', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({angle: angle})
+                body: JSON.stringify({angle})
             });
         }
 
         function servoStep(delta) {
             const slider = document.getElementById('servoSlider');
-            let angle = parseInt(slider.value) + delta;
-            angle = Math.max(0, Math.min(180, angle));
+            const angle  = Math.max(0, Math.min(180, parseInt(slider.value) + delta));
             slider.value = angle;
             sendServo(angle);
+        }
+
+        // ── Mode ───────────────────────────────────────────
+        function clearModes() {
+            document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
         }
 
         function setMode(mode) {
             fetch('/mode', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mode: mode})
+                body: JSON.stringify({mode})
             });
-            document.getElementById('btn_manual').classList.remove('active-mode');
-            document.getElementById('btn_follow_person').classList.remove('active-mode');
-            if (document.getElementById('btn_' + mode)) {
-                document.getElementById('btn_' + mode).classList.add('active-mode');
-            }
-            document.getElementById('mode_status').innerText = 'Mode: ' + mode;
+            clearModes();
+            const el = document.getElementById('btn_' + mode);
+            if (el) el.classList.add('active');
+            document.getElementById('mode_status').textContent =
+                'Mode: ' + mode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function focusFindObject() {
+            clearModes();
+            document.getElementById('btn_find_object').classList.add('active');
+            document.getElementById('objectTarget').focus();
         }
 
         function setFindObject() {
@@ -179,32 +565,44 @@
             fetch('/mode', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mode: 'find_object', target: target})
+                body: JSON.stringify({mode: 'find_object', target})
             });
-            document.getElementById('btn_manual').classList.remove('active-mode');
-            document.getElementById('btn_follow_person').classList.remove('active-mode');
-            document.getElementById('mode_status').innerText = 'Mode: Find Object (' + target + ')';
+            clearModes();
+            document.getElementById('btn_find_object').classList.add('active');
+            document.getElementById('mode_status').textContent = 'Mode: Find Object (' + target + ')';
         }
 
-        // Keyboard controls
+        // ── Keyboard controls ──────────────────────────────
+        const keyMap = {
+            'ArrowUp':    { cmd: 'FORWARD:200',  id: 'dp-fwd' },
+            'ArrowDown':  { cmd: 'BACKWARD:200', id: 'dp-bck' },
+            'ArrowLeft':  { cmd: 'LEFT:255',     id: 'dp-lft' },
+            'ArrowRight': { cmd: 'RIGHT:255',    id: 'dp-rgt' },
+            ' ':          { cmd: 'STOP',         id: 'dp-stp' },
+        };
         const keyState = {};
 
         document.addEventListener('keydown', (e) => {
+            // Don't capture keys when typing in the find-object input
+            if (e.target.tagName === 'INPUT') return;
             if (keyState[e.key]) return;
             keyState[e.key] = true;
 
-            switch(e.key) {
-                case 'ArrowUp':    sendCmd('FORWARD:200'); break;
-                case 'ArrowDown':  sendCmd('BACKWARD:200'); break;
-                case 'ArrowLeft':  sendCmd('LEFT:255'); break;
-                case 'ArrowRight': sendCmd('RIGHT:255'); break;
-                case ' ':          sendCmd('STOP'); break;
-                case 'a':          servoStep(-10); break;
-                case 'd':          servoStep(10); break;
+            if (keyMap[e.key]) {
+                e.preventDefault();
+                sendCmd(keyMap[e.key].cmd);
+                document.getElementById(keyMap[e.key].id)?.classList.add('pressed');
+            } else if (e.key === 'a') {
+                servoStep(-10);
+            } else if (e.key === 'd') {
+                servoStep(10);
             }
         });
 
         document.addEventListener('keyup', (e) => {
+            if (keyState[e.key] && keyMap[e.key]) {
+                document.getElementById(keyMap[e.key].id)?.classList.remove('pressed');
+            }
             keyState[e.key] = false;
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
                 sendCmd('STOP');
