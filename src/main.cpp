@@ -7,7 +7,7 @@
 #include "mqtt_client.h"
 
 unsigned long lastSensorPublish = 0;
-#define SENSOR_INTERVAL 500  // publish every 500ms
+#define SENSOR_INTERVAL 500
 
 void setup() {
   Serial.begin(115200);
@@ -15,21 +15,32 @@ void setup() {
   servoSetup();
   indicatorsSetup();
   dhtSetup();
-  mqttSetup();
   motorSetup();
   motorStop();
+  mqttSetup();
   setLED(LED_GREEN, HIGH);
 }
 
 void loop() {
+  mqttLoop();
+
   if (isKillSwitchPressed()) {
+    motorStop();
     setLED(LED_BLUE, HIGH);
-    // stop motors here later
+    mqtt.publish(TOPIC_STATUS, "killswitch");
+
+    // Block until button released
+    while (isKillSwitchPressed()) {
+      mqttLoop();
+      delay(50);
+    }
+
+    setLED(LED_BLUE, LOW);
+    mqtt.publish(TOPIC_STATUS, "online");
     return;
   }
 
   setLED(LED_BLUE, LOW);
-  mqttLoop();
 
   unsigned long now = millis();
   if (now - lastSensorPublish >= SENSOR_INTERVAL) {
